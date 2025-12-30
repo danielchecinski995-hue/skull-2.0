@@ -22,6 +22,7 @@ async def main():
         assets = {
             'player': pygame.image.load('assets/player.png').convert_alpha(),
             'enemy': pygame.image.load('assets/enemy.png').convert_alpha(),
+            'enemy_head': pygame.image.load('assets/enemy_head.png').convert_alpha(),
             'projectile': pygame.image.load('assets/projectile.png').convert_alpha(),
             'orb': pygame.image.load('assets/orb.png').convert_alpha(),
             # Background is solid color now
@@ -30,6 +31,7 @@ async def main():
         # Scale assets to appropriate sizes
         assets['player'] = pygame.transform.scale(assets['player'], (60, 60))
         assets['enemy'] = pygame.transform.scale(assets['enemy'], (40, 40))
+        assets['enemy_head'] = pygame.transform.scale(assets['enemy_head'], (60, 60))  # Head is 1.5x larger
         assets['projectile'] = pygame.transform.scale(assets['projectile'], (16, 24))
         assets['orb'] = pygame.transform.scale(assets['orb'], (20, 20))
     except Exception as e:
@@ -39,7 +41,7 @@ async def main():
     # Initialize game objects
     player = Player(SCREEN_WIDTH, SCREEN_HEIGHT, assets.get('player'))
     projectile_manager = ProjectileManager(assets.get('projectile'))
-    entity_manager = EntityManager(SCREEN_WIDTH, SCREEN_HEIGHT, assets.get('enemy'))
+    entity_manager = EntityManager(SCREEN_WIDTH, SCREEN_HEIGHT, assets.get('enemy'), assets.get('enemy_head'))
     combat_manager = CombatManager()
     progression_manager = ProgressionManager(SCREEN_WIDTH, SCREEN_HEIGHT, assets.get('orb'))
     difficulty_manager = DifficultyManager()
@@ -62,7 +64,7 @@ async def main():
                 if event.key == pygame.K_r:
                     # Quick reset (re-init modules)
                     player = Player(SCREEN_WIDTH, SCREEN_HEIGHT, assets.get('player'))
-                    entity_manager = EntityManager(SCREEN_WIDTH, SCREEN_HEIGHT, assets.get('enemy'))
+                    entity_manager = EntityManager(SCREEN_WIDTH, SCREEN_HEIGHT, assets.get('enemy'), assets.get('enemy_head'))
                     game_over = False
 
         keys = pygame.key.get_pressed()

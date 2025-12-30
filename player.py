@@ -24,6 +24,7 @@ class Player:
         # Firing
         self.fire_rate = 0.15  # seconds between shots
         self.fire_timer = 0
+        self.rapid_fire = False
 
         # Visual
         self.color = (100, 200, 255)
@@ -36,6 +37,9 @@ class Player:
             self.velocity_x = -self.speed
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             self.velocity_x = self.speed
+            
+        # Rapid Fire Input
+        self.rapid_fire = keys[pygame.K_SPACE]
 
         # Apply movement with delta time
         self.x += self.velocity_x * dt
@@ -54,7 +58,10 @@ class Player:
     def try_fire(self, projectile_manager):
         if self.fire_timer <= 0:
             projectile_manager.spawn(self.x, self.y - self.height / 2)
-            self.fire_timer = self.fire_rate
+            
+            # 3x speed if rapid fire is active
+            delay = self.fire_rate / 3.0 if self.rapid_fire else self.fire_rate
+            self.fire_timer = delay
 
     def draw(self, screen):
         if self.image:
