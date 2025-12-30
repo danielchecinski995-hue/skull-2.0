@@ -96,15 +96,24 @@ class CombatManager:
         projectile.active = False
         
         destroyed = False
+        damage = 1 # Simple 1 damage per hit for now
         
-        # Trigger Global Hit-Stop (Caterpillar Logic)
-        if entity_manager and hasattr(entity_manager, 'notify_hit'):
-            entity_manager.notify_hit()
-        
-        # Visual Shake on specific segment
-        if hasattr(target, 'hit'):
-            target.hit() # Just sets visual shake timer
-        
+        # Show Damage Number
+        if hasattr(target, 'x') and hasattr(target, 'y'):
+             self.damage_numbers.append(DamageNumber(target.x, target.y - 20, damage))
+
+        # Deal Damage
+        if hasattr(target, 'take_damage'):
+            is_destroyed = target.take_damage(damage)
+            if is_destroyed:
+                destroyed = True
+                if entity_manager and hasattr(entity_manager, 'remove_entity'):
+                    entity_manager.remove_entity(target)
+        else:
+             # Legacy/Fallback
+             target.active = False
+             destroyed = True
+
         return destroyed
 
     def _apply_knockback(self, projectile, target):

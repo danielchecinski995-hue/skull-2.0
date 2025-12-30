@@ -6,26 +6,16 @@ import math
 from config import SNAKE_SPEED_X, SNAKE_SPACING, SNAKE_DROP_STEP, SNAKE_LENGTH, SPRING_STIFFNESS, RETURN_FORCE, DAMPING, MASS, SCREEN_WIDTH, SCREEN_HEIGHT
 
 class SnakeSegment:
-    def __init__(self, x, y, image=None):
+    def __init__(self, x, y, image=None, hp=5):
         self.x = x
         self.y = y
         self.image = image
         self.active = True
         self.radius = 20
-        self.velocity_y = 0.0 # Kept for hit feedback
-
-    def hit(self, force=300):
-        """Visual feedback"""
-        self.velocity_y = -5 
-
-    def update_physics(self, dt):
-        # purely visual pop-up decay (offset from the path position)
-        if self.velocity_y != 0:
-            # We don't change .y directly because that's controlled by path
-            # We would need a visual offset. 
-            # For simplicity, we'll accept that hit reaction might fight the path for a frame
-            # Or we can just ignore physics for now as requested "strict movement"
-            pass
+        self.velocity_y = 0.0 
+        self.hp = hp
+        self.max_hp = hp
+        self.font = pygame.font.Font(None, 24)
 
     def draw(self, screen, offset_y=0):
         draw_y = self.y + offset_y
@@ -34,15 +24,63 @@ class SnakeSegment:
              if screen: screen.blit(self.image, rect)
         else:
              if screen: pygame.draw.circle(screen, (220, 220, 210), (int(self.x), int(draw_y)), self.radius)
+        
+        # Draw HP
+        if self.hp < self.max_hp:
+             color = (255, 100, 100)
+        else:
+             color = (200, 200, 200)
              
-    def get_position(self):
-        return (self.x, self.y)
-
-    def get_radius(self):
-        return self.radius
+        text = self.font.render(str(self.hp), True, color)
+        if screen: screen.blit(text, (self.x - 5, self.y - 10))
 
     def take_damage(self, amount):
-        self.hit()
+        self.hp -= amount
+        if self.hp <= 0:
+            return True # Destroyed
+        return False
+
+# ... inside BoneSnake ...
+
+    def remove_segment(self, segment):
+        """
+        Removes a segment and snaps the front part of the snake back 
+        to fill the gap.
+        """
+        if segment in self.segments:
+            self.segments.remove(segment)
+            
+            # Snap Back Logic:
+            # We need to rewind the path history by SNAKE_SPACING distance.
+            # This effectively pulls the head back.
+            
+            # Estimate how many points to pop based on average distance
+            # Since we insert every ~2px (dist_moved >= 2.0), 
+            # and spacing is 25px, we need to remove approx 12-13 points.
+            
+            # More robust: Walk from history[0] and remove until distance > SNAKE_SPACING
+            
+            points_to_remove = 0
+            accumulated = 0
+            for i in range(len(self.path_history) - 1):
+                p1 = self.path_history[i]
+                p2 = self.path_history[i+1]
+                dist = math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)
+                accumulated += dist
+                points_to_remove += 1
+                
+                if accumulated >= SNAKE_SPACING:
+                    break
+            
+            # Remove points from front (Head history)
+            if points_to_remove > 0:
+                 self.path_history = self.path_history[points_to_remove:]
+                 # Reposition head to new history start
+                 if self.path_history:
+                     self.head_x = self.path_history[0][0]
+                     self.head_y = self.path_history[0][1]
+            
+            return True
         return False
 
 class BoneSnake:
@@ -71,6 +109,71 @@ class BoneSnake:
         # Create Head Segment
         self.segments.append(SnakeSegment(start_x, start_y, self.image))
             
+    def remove_segment(self, segment):
+        """
+        Removes a segment and snaps the front part of the snake back 
+        to fill the gap.
+        """
+        if segment in self.segments:
+            self.segments.remove(segment)
+            
+            # Snap Back Logic:
+            target_cut_dist = SNAKE_SPACING
+            accumulated = 0
+            
+            for i in range(len(self.path_history) - 1):
+                p1 = self.path_history[i]
+                p2 = self.path_history[i+1]
+                dist = math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)
+                
+                if accumulated + dist >= target_cut_dist:
+                    # Found the segment to cut. Calculate ratio.
+                    remaining = target_cut_dist - accumulated
+                    ratio = remaining / dist if dist > 0 else 0
+                    
+                    # Interpolate exact new head position
+                    new_x = p1[0] + (p2[0] - p1[0]) * ratio
+                    new_y = p1[1] + (p2[1] - p1[1]) * ratio
+                    
+                    # Update History: Remove everything before this point
+                    # Insert new head at front
+                    self.path_history = self.path_history[i+1:]
+                    self.path_history.insert(0, (new_x, new_y))
+                    
+                    self.head_x = new_x
+                    self.head_y = new_y
+                    
+                    # -- Deduce State --
+                    if len(self.path_history) >= 2:
+                        # Use the NEW head (p0) and the next point (p1)
+                        p_next = self.path_history[1]
+                        dx = new_x - p_next[0]
+                        dy = new_y - p_next[1]
+                        # Note: We look from Head -> Next (Backwards in time)
+                        # So movement vector was Head - Next ?? No. 
+                        # Movement defined history: Newest(Head) ... Oldest.
+                        # Vector P1->P0 is the "Forward" direction of movement.
+                         
+                        dx_fwd = new_x - p_next[0]
+                        dy_fwd = new_y - p_next[1]
+
+                        if abs(dy_fwd) > abs(dx_fwd):
+                             self.state = "DROPPING"
+                             row = int((self.head_y - 50.0) / SNAKE_DROP_STEP)
+                             self.target_y = 50.0 + (row + 1) * SNAKE_DROP_STEP
+                             self.direction = 1 if self.head_x > self.screen_width / 2 else -1
+                        else:
+                             self.state = "MOVING"
+                             self.direction = 1 if dx_fwd > 0 else -1
+
+                     return True
+                
+                accumulated += dist
+            
+            return True
+
+        return False
+
     def update(self, dt):
         # --- 1. Move Head ---
         move_speed = SNAKE_SPEED_X
@@ -208,5 +311,9 @@ class EntityManager:
     def get_entities(self):
         return self.snake.get_segments()
     
+    def remove_entity(self, entity):
+        """Called when a segment is destroyed"""
+        return self.snake.remove_segment(entity)
+
     def notify_hit(self):
         pass
